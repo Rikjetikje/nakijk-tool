@@ -26,7 +26,7 @@ export const handler = async (event) => {
             },
             {
               type: "text",
-              text: "Transcribeer de handgeschreven of gedrukte tekst in deze afbeelding zo nauwkeurig mogelijk. Regels:\n- Kopieer de tekst exact zoals hij er staat, inclusief spelfouten, doorhalingen, afkortingen en interpunctiefouten\n- Verbeter NIETS — geen spelfouten, geen grammatica, geen interpunctie\n- Gebruik dezelfde alinea-indeling en regelafbrekingen als in het origineel\n- Geef alleen de tekst terug, geen uitleg, geen commentaar, geen aanhalingstekens eromheen"
+              text: "Je bent een OCR-systeem. Deze afbeelding bevat een screenshot van digitaal getypte tekst in een standaard lettertype. De tekst is dus perfect leesbaar — lees hem letter voor letter over zoals hij er staat.\n\nDe getranscribeerde tekst wordt daarna door een docent nagelezen en handmatig nagekeken op fouten. Het is dus niet jouw taak om fouten te verbeteren — dat doet de docent zelf. Jouw enige taak is zo nauwkeurig mogelijk overtikken.\n\nRegels:\n- Lees wat er letterlijk staat, NIET wat er logisch zou staan in de context\n- Vervang NOOIT een woord door een ander woord, ook niet als het er onlogisch uitziet\n- Kopieer spelfouten, grammaticafouten, dubbele spaties en interpunctiefouten exact over\n- Gebruik dezelfde alinea-indeling en regelafbrekingen als in het origineel\n- Geef alleen de getranscribeerde tekst terug, geen uitleg of commentaar"
             }
           ]
         }]
