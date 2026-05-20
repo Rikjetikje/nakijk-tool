@@ -17,19 +17,30 @@ export const handler = async (event) => {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType || "image/png", data: image }
-            },
-            {
-              type: "text",
-              text: "Je bent een OCR-systeem. Deze afbeelding bevat een screenshot van digitaal getypte tekst in een standaard lettertype. De tekst is dus perfect leesbaar — lees hem letter voor letter over zoals hij er staat.\n\nDe getranscribeerde tekst wordt daarna door een docent nagelezen en handmatig nagekeken op fouten. Het is dus niet jouw taak om fouten te verbeteren — dat doet de docent zelf. Jouw enige taak is zo nauwkeurig mogelijk overtikken.\n\nRegels:\n- Lees wat er letterlijk staat, NIET wat er logisch zou staan in de context\n- Vervang NOOIT een woord door een ander woord, ook niet als het er onlogisch uitziet\n- Kopieer spelfouten, grammaticafouten, dubbele spaties en interpunctiefouten exact over\n- Gebruik dezelfde alinea-indeling en regelafbrekingen als in het origineel\n- Geef alleen de getranscribeerde tekst terug, geen uitleg of commentaar"
-            }
-          ]
-        }]
+        system: "Je bent een OCR-systeem. Je taak is uitsluitend het letterlijk overtikken van tekst uit afbeeldingen. Je verbetert nooit iets — geen spelfouten, geen typfouten, geen interpunctie. De docent doet de controle zelf. Jij tikt alleen over wat je ziet, teken voor teken.",
+        messages: [
+          {
+            role: "user",
+            content: "Ik ga je zo een screenshot sturen van een leerlingtekst. Het is heel belangrijk dat je de tekst exact overtikt zoals hij er staat. Spelfouten, typfouten, verkeerde interpunctie — alles moet gewoon blijven zoals het is. Kun je dat doen?"
+          },
+          {
+            role: "assistant",
+            content: "Ja, ik tik de tekst exact over zoals hij er staat. Ik verander niets — geen spelfouten, geen interpunctie, niets. Stuur de afbeelding maar."
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: { type: "base64", media_type: mediaType || "image/png", data: image }
+              },
+              {
+                type: "text",
+                text: "Tik deze tekst exact over."
+              }
+            ]
+          }
+        ]
       })
     });
 
