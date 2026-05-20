@@ -15,7 +15,7 @@ export const handler = async (event) => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         messages: [{
           role: "user",
@@ -26,7 +26,7 @@ export const handler = async (event) => {
             },
             {
               type: "text",
-              text: "Geef alleen de tekst terug die je in deze afbeelding ziet. Geen uitleg, geen opmaak, geen commentaar. Alleen de exacte tekst, met regelafbrekingen zoals in het origineel."
+              text: "Transcribeer de handgeschreven of gedrukte tekst in deze afbeelding zo nauwkeurig mogelijk. Regels:\n- Kopieer de tekst exact zoals hij er staat, inclusief spelfouten, doorhalingen, afkortingen en interpunctiefouten\n- Verbeter NIETS — geen spelfouten, geen grammatica, geen interpunctie\n- Gebruik dezelfde alinea-indeling en regelafbrekingen als in het origineel\n- Geef alleen de tekst terug, geen uitleg, geen commentaar, geen aanhalingstekens eromheen"
             }
           ]
         }]
