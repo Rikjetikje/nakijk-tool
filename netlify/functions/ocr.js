@@ -15,7 +15,7 @@ export const handler = async (event) => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-3-5-sonnet-20241022",
         max_tokens: 4096,
         messages: [{
           role: "user",
