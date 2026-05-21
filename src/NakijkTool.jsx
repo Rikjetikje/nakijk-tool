@@ -708,7 +708,7 @@ export default function NakijkTool() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "OCR mislukt");
       setInlineTextInput(prev => prev + (prev ? "\n" : "") + (data.text || ""));
-      setOcrVerifyMode(true);
+      // setOcrVerifyMode(true); // overlay verificatie: tijdelijk uitgeschakeld
     } catch (err) {
       URL.revokeObjectURL(objectUrl);
       setOcrImageUrl(null);
