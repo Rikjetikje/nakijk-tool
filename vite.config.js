@@ -9,11 +9,10 @@ export default defineConfig({
     port: parseInt(process.env.PORT) || 5173,
     strictPort: true,
     proxy: {
-      // Forwards /api/ocr to the Netlify dev server (netlify dev runs on 8888)
+      // Forwards /api/ocr to the Vercel dev server (vercel dev runs on 3000)
       '/api/ocr': {
-        target: 'http://localhost:8888',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        rewrite: () => '/.netlify/functions/ocr',
       },
     },
   },
