@@ -644,7 +644,7 @@ export default function NakijkTool() {
     setSelectedHighlightId(null); setFrozenTabs(null); setTaalTooShort(null);
     setScores({}); setNotes({}); setGeneralNote("");
     setCategories(cats);
-    setInlineTextMode(false); setInlineTextInput(""); setHandwrittenMode(false);
+    setInlineTextMode(false); setInlineTextInput(""); setOcrVerifyMode(false); setOcrImageUrl(null); setHandwrittenMode(false); setOcrVerifyMode(false); if (ocrImageUrl) { URL.revokeObjectURL(ocrImageUrl); setOcrImageUrl(null); }
     const startClass = savedClasses.find(c => (c.students || []).some(s => s.id === currentStudentId));
     if (startClass && !sessionClassIds.includes(startClass.id)) setGradingClassId("");
     else setGradingClassId(startClass?.id || "");
@@ -674,7 +674,7 @@ export default function NakijkTool() {
     setSelectedHighlightId(null); setFrozenTabs(null); setTaalTooShort(null);
     setScores({}); setNotes({}); setGeneralNote("");
     setCategories(cats);
-    setInlineTextMode(false); setInlineTextInput("");
+    setInlineTextMode(false); setInlineTextInput(""); setOcrVerifyMode(false); setOcrImageUrl(null);
     const startClass = savedClasses.find(c => (c.students || []).some(s => s.id === currentStudentId));
     if (startClass && !sessionClassIds.includes(startClass.id)) setGradingClassId("");
     else setGradingClassId(startClass?.id || "");
@@ -768,7 +768,7 @@ export default function NakijkTool() {
     } else {
       setStudentName(""); setStudentClass(""); setCurrentStudentId(null);
       setStudentText(""); setCurrentGradeId(null);
-      setInlineTextMode(false); setInlineTextInput("");
+      setInlineTextMode(false); setInlineTextInput(""); setOcrVerifyMode(false); setOcrImageUrl(null);
     }
     setView("grading");
   };
@@ -808,7 +808,7 @@ export default function NakijkTool() {
     scoresInitialized.current = false;
     setCurrentGradeId(grade.id);
     setCategories(cats);
-    setInlineTextMode(false); setInlineTextInput("");
+    setInlineTextMode(false); setInlineTextInput(""); setOcrVerifyMode(false); setOcrImageUrl(null);
     const resumeClass = savedClasses.find(c => (c.students || []).some(s => s.id === grade.studentId));
     setGradingClassId(resumeClass?.id || "");
     // Restore session classes if not set
