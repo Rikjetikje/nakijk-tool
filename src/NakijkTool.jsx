@@ -319,6 +319,11 @@ export default function NakijkTool() {
   const [handwrittenMode, setHandwrittenMode] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState(null);
+  const [ocrImageUrl, setOcrImageUrl] = useState(null);
+  const [ocrVerifyMode, setOcrVerifyMode] = useState(false);
+  const [ocrFontSize, setOcrFontSize] = useState(13);
+  const [ocrTextPos, setOcrTextPos] = useState({ x: 70, y: 40 });
+  const [ocrLineHeight, setOcrLineHeight] = useState(16);
 
   // Existing state
   const [categories, setCategories] = useState([]);
@@ -686,6 +691,8 @@ export default function NakijkTool() {
     if (!file) return;
     setOcrError(null);
     setOcrLoading(true);
+    const objectUrl = URL.createObjectURL(file);
+    setOcrImageUrl(objectUrl);
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -701,12 +708,28 @@ export default function NakijkTool() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "OCR mislukt");
       setInlineTextInput(prev => prev + (prev ? "\n" : "") + (data.text || ""));
+      setOcrVerifyMode(true);
     } catch (err) {
+      URL.revokeObjectURL(objectUrl);
+      setOcrImageUrl(null);
       setOcrError(err.message || "OCR mislukt. Probeer opnieuw.");
     } finally {
       setOcrLoading(false);
     }
   }, [handwrittenMode]);
+
+  const handleOverlayDragStart = useCallback((e) => {
+    e.preventDefault();
+    const onMove = (e) => {
+      setOcrTextPos(prev => ({ x: Math.max(0, prev.x + e.movementX), y: Math.max(0, prev.y + e.movementY) }));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   const handleStartSession = (modelId, classIds) => {
     const model = savedModels.find(m => m.id === modelId);
@@ -2118,6 +2141,41 @@ export default function NakijkTool() {
                 <div style={{ fontSize: "13px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: "#1a1a2e", marginBottom: "16px" }}>
                   Tekst van {studentName || "de leerling"}
                 </div>
+                {ocrVerifyMode && ocrImageUrl ? (
+                  <div>
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px", padding: "10px 14px", background: "#f0f4ff", border: "1px solid #c7d4f5", borderRadius: "10px", fontSize: "12px", color: "#4B5563" }}>
+                      <span style={{ fontWeight: "700", color: "#1a1a2e", flexShrink: 0 }}>Overlay instellen:</span>
+                      {[["Lettergrootte", ocrFontSize, setOcrFontSize, 8, 24], ["Regelafstand", ocrLineHeight, setOcrLineHeight, 10, 40]].map(([label, val, setter, min, max]) => (
+                        <label key={label} style={{ display: "flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
+                          <span>{label}</span>
+                          <input type="range" min={min} max={max} value={val} onChange={e => setter(+e.target.value)} style={{ width: "70px", accentColor: "#4338CA" }} />
+                          <span style={{ minWidth: "28px", color: "#4338CA", fontWeight: "600" }}>{val}</span>
+                        </label>
+                      ))}
+                      <span style={{ fontSize: "11px", color: "#888" }}>Sleep het rode tekstvak naar de juiste positie. Trek de rechterrand om de breedte aan te passen.</span>
+                    </div>
+                    <div style={{ position: "relative", overflow: "auto", maxHeight: "480px", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
+                      <img src={ocrImageUrl} alt="screenshot" style={{ display: "block", width: "auto", maxWidth: "none" }} />
+                      <div style={{ position: "absolute", top: ocrTextPos.y, left: ocrTextPos.x, width: "500px", minWidth: "100px", border: "1px dashed rgba(210,30,30,0.5)", borderRadius: "4px", background: "rgba(255,240,240,0.15)", overflow: "hidden", resize: "horizontal" }}>
+                        <div onMouseDown={handleOverlayDragStart} style={{ padding: "2px 8px", background: "rgba(210,30,30,0.12)", cursor: "grab", fontSize: "10px", color: "rgba(180,20,20,0.8)", userSelect: "none", letterSpacing: "0.05em" }}>⠿ versleep</div>
+                        <pre style={{ margin: 0, padding: "0 4px 4px", fontFamily: "Tahoma, sans-serif", fontSize: ocrFontSize + "px", lineHeight: ocrLineHeight + "px", color: "rgba(210,30,30,0.85)", background: "transparent", whiteSpace: "pre", userSelect: "none", pointerEvents: "none" }}>{inlineTextInput}</pre>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#888", marginTop: "6px", marginBottom: "10px" }}>Klopt er iets niet? Corrigeer het hieronder.</div>
+                    <textarea value={inlineTextInput} onChange={e => setInlineTextInput(e.target.value)}
+                      style={{ width: "100%", minHeight: "120px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "14px", fontFamily: "'Georgia', serif", lineHeight: "1.8", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }} />
+                    <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                      <button onClick={() => { if (ocrImageUrl) { URL.revokeObjectURL(ocrImageUrl); setOcrImageUrl(null); } setOcrVerifyMode(false); }}
+                        style={{ flex: 1, padding: "12px", fontSize: "14px", fontWeight: "600", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer" }}>
+                        Bevestigen {"→"}
+                      </button>
+                      <button onClick={() => { if (ocrImageUrl) { URL.revokeObjectURL(ocrImageUrl); setOcrImageUrl(null); } setOcrVerifyMode(false); setInlineTextInput(""); }}
+                        style={{ padding: "12px 20px", fontSize: "14px", fontWeight: "600", background: "#fff", color: "#666", border: "1px solid #ddd", borderRadius: "10px", cursor: "pointer" }}>
+                        Annuleren
+                      </button>
+                    </div>
+                  </div>
+                ) : (<>
                 <div style={{ position: "relative" }}>
                   <textarea value={inlineTextInput} onChange={e => { if (!handwrittenMode) setInlineTextInput(e.target.value); }}
                     onPaste={handwrittenMode ? undefined : handleImagePaste}
@@ -2158,6 +2216,7 @@ export default function NakijkTool() {
                     Start nakijken {"\u2192"}
                   </button>
                 </div>
+                </>)}
               </div>
             )}
             <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => selectHighlight(null)}>
