@@ -12,6 +12,8 @@ const TAAL_SUB_COLORS = {
   Interpunctiefouten: { bg: "#E0E7FF", border: "#6366F1", text: "#3730A3", icon: "I" },
 };
 
+const REPEAT_COLOR = { bg: "#F3F4F6", border: "#9CA3AF", text: "#6B7280" };
+
 const DEFAULT_TAAL_GROUPS_CONFIG = [
   { name: "Formuleringsfouten", ranges: [
     { id: "f0", min: 1, max: 2, aftrek: 1 },
@@ -91,7 +93,7 @@ function buildSegments(text, highlights) {
   for (let i = 0; i < sorted.length - 1; i++) {
     const s = sorted[i], e = sorted[i + 1];
     const layers = highlights.filter((h) => h.start <= s && h.end >= e)
-      .map((h) => ({ id: h.id, color: h.displayColor || h.color, categoryName: h.categoryName, itemLabel: h.itemLabel, itemId: h.itemId, taalGroup: h.taalGroup }));
+      .map((h) => ({ id: h.id, color: h.displayColor || h.color, categoryName: h.categoryName, itemLabel: h.itemLabel, itemId: h.itemId, taalGroup: h.taalGroup, isRepeat: h.isRepeat }));
     segs.push({ start: s, end: e, layers });
   }
   return segs;
@@ -198,7 +200,8 @@ function HighlightableText({ text, highlights, onHighlight, onSelectHighlight, h
         const str = text.slice(seg.start, seg.end);
         if (seg.layers.length === 0) return <span key={i}>{str}</span>;
 
-        const bgLayers = seg.layers.filter((l) => !l.taalGroup);
+        const bgLayers = seg.layers.filter((l) => !l.taalGroup && !l.isRepeat);
+        const repeatLayers = seg.layers.filter((l) => l.isRepeat);
         const spellLayers = seg.layers.filter((l) => l.taalGroup === "Spelfouten");
         const formLayers = seg.layers.filter((l) => l.taalGroup === "Formuleringsfouten");
         const interpLayers = seg.layers.filter((l) => l.taalGroup === "Interpunctiefouten");
@@ -210,9 +213,13 @@ function HighlightableText({ text, highlights, onHighlight, onSelectHighlight, h
         const selectedLayer = seg.layers.find((l) => l.id === selectedHighlightId);
 
         const bgLayer = bgLayers[0];
-        const bgColor = bgLayer ? bgLayer.color.bg + (active && selectedLayer && !selectedLayer.taalGroup ? "ee" : "cc") : "transparent";
+        const bgColor = bgLayer ? bgLayer.color.bg + (active && selectedLayer && !selectedLayer.taalGroup && !selectedLayer.isRepeat ? "ee" : "cc") : (repeatLayers.length > 0 && !bgLayer ? "#F3F4F6" : "transparent");
 
         const bgImages = [], bgSizes = [], bgPositions = [];
+        if (repeatLayers.length > 0) {
+          bgImages.push("repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(156,163,175,0.4) 3px, rgba(156,163,175,0.4) 4px)");
+          bgSizes.push("auto"); bgPositions.push("auto");
+        }
         if (spellLayers.length > 0) {
           const c = TAAL_SUB_COLORS.Spelfouten.border;
           const svg = "data:image/svg+xml," + encodeURIComponent('<svg width="8" height="6" viewBox="0 0 8 6" xmlns="http://www.w3.org/2000/svg"><path d="M0 3 Q2 0.5 4 3 Q6 5.5 8 3" fill="none" stroke="' + c + '" stroke-width="1.2"/></svg>');
@@ -357,6 +364,9 @@ export default function NakijkTool() {
   const [taalTooShort, setTaalTooShort] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [generalNote, setGeneralNote] = useState("");
+  const [textEditMode, setTextEditMode] = useState(false);
+  const [textEditValue, setTextEditValue] = useState("");
+  const [textEditPending, setTextEditPending] = useState(null);
 
   const nextId = useRef(1);
   const scoresInitialized = useRef(false);
@@ -368,7 +378,7 @@ export default function NakijkTool() {
 
   // Memos
   const taalCounts = useMemo(() => {
-    const c = {}; highlights.forEach((h) => { if (h.taalGroup) { const k = h.categoryId + "::" + h.taalGroup; c[k] = (c[k] || 0) + 1; } }); return c;
+    const c = {}; highlights.forEach((h) => { if (h.taalGroup && !h.isRepeat) { const k = h.categoryId + "::" + h.taalGroup; c[k] = (c[k] || 0) + 1; } }); return c;
   }, [highlights]);
 
   const itemHighlightCounts = useMemo(() => {
@@ -944,6 +954,44 @@ export default function NakijkTool() {
     setUndoStack((prev) => prev.slice(0, -1));
     setHighlights((prev) => [...prev, undoStack[undoStack.length - 1]]);
   };
+
+  const addRepeatHighlight = useCallback((start, end) => {
+    const id = nextId.current++;
+    setHighlights((prev) => [...prev, { id, start, end, categoryId: null, categoryName: null, color: REPEAT_COLOR, displayColor: REPEAT_COLOR, itemId: null, itemLabel: "Herhaalfout", taalGroup: null, isRepeat: true }]);
+    setUndoStack([]);
+  }, []);
+
+  const commitTextEdit = useCallback((newText, prefixLen, oldEnd, delta, highlightsToRemove) => {
+    const adjustedHighlights = highlights.map(h => {
+      if (h.end <= prefixLen) return h;
+      if (h.start >= oldEnd) return { ...h, start: h.start + delta, end: h.end + delta };
+      return null;
+    }).filter(Boolean);
+    setStudentText(newText);
+    setHighlights(adjustedHighlights);
+    if (currentGradeId) {
+      setSavedGrades(prev => prev.map(g => g.id === currentGradeId ? { ...g, studentText: newText, highlights: adjustedHighlights, savedAt: new Date().toISOString() } : g));
+    }
+    setTextEditMode(false);
+    setTextEditPending(null);
+    setSelectedHighlightId(null);
+    setFrozenTabs(null);
+  }, [highlights, currentGradeId]); // eslint-disable-line
+
+  const applyTextEdit = useCallback((newText) => {
+    if (newText === studentText) { setTextEditMode(false); return; }
+    let prefixLen = 0;
+    while (prefixLen < studentText.length && prefixLen < newText.length && studentText[prefixLen] === newText[prefixLen]) prefixLen++;
+    let oldEnd = studentText.length, newEnd = newText.length;
+    while (oldEnd > prefixLen && newEnd > prefixLen && studentText[oldEnd - 1] === newText[newEnd - 1]) { oldEnd--; newEnd--; }
+    const delta = (newEnd - prefixLen) - (oldEnd - prefixLen);
+    const affected = highlights.filter(h => h.start < oldEnd && h.end > prefixLen);
+    if (affected.length > 0) {
+      setTextEditPending({ newText, prefixLen, oldEnd, delta, affected });
+    } else {
+      commitTextEdit(newText, prefixLen, oldEnd, delta, []);
+    }
+  }, [studentText, highlights, commitTextEdit]);
 
   const selectHighlight = useCallback((id) => {
     if (id === null) { setSelectedHighlightId(null); setFrozenTabs(null); return; }
@@ -2011,7 +2059,7 @@ export default function NakijkTool() {
                     document.body.appendChild(iframe);
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
                     doc.open();
-                    doc.write('<html><head><title>Resultaat' + (studentName ? ' - ' + studentName : '') + '</title><style>body{font-family:"Segoe UI",sans-serif;padding:24px;color:#1a1a2e;font-size:13px}h2{font-family:Georgia,serif;font-weight:400}.no-print{display:none!important}</style></head><body>' + el.innerHTML + '</body></html>');
+                    doc.write('<html><head><title>' + (studentName || 'Resultaat') + (studentClass ? ' (' + studentClass + ')' : '') + '</title><style>body{font-family:"Segoe UI",sans-serif;padding:24px;color:#1a1a2e;font-size:13px}h2{font-family:Georgia,serif;font-weight:400}.no-print{display:none!important}</style></head><body>' + el.innerHTML + '</body></html>');
                     doc.close();
                     setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => { try { document.body.removeChild(iframe); } catch(e) {} }, 1000); }, 200);
                   }}
@@ -2103,7 +2151,7 @@ export default function NakijkTool() {
                 {tabHighlights.length > 1 && (
                   <div style={{ display: "flex", gap: "2px", paddingLeft: "20px", paddingTop: "6px" }}>
                     {tabHighlights.map((oh) => { const ohCol = oh.displayColor || oh.color; const isCurrent = oh.id === selectedHighlightId;
-                      return (<button key={oh.id} onClick={() => setSelectedHighlightId(oh.id)} style={{ padding: "4px 10px", fontSize: "10px", fontWeight: "700", background: isCurrent ? ohCol.bg : ohCol.bg + "66", color: ohCol.text, border: "1px solid " + (isCurrent ? ohCol.border : ohCol.border + "44"), borderBottom: isCurrent ? "1px solid " + ohCol.bg : "1px solid " + ohCol.border + "44", borderRadius: "6px 6px 0 0", cursor: "pointer", position: "relative", bottom: "-1px", zIndex: isCurrent ? 2 : 1 }}>{oh.taalGroup || oh.categoryName}</button>);
+                      return (<button key={oh.id} onClick={() => setSelectedHighlightId(oh.id)} style={{ padding: "4px 10px", fontSize: "10px", fontWeight: "700", background: isCurrent ? ohCol.bg : ohCol.bg + "66", color: ohCol.text, border: "1px solid " + (isCurrent ? ohCol.border : ohCol.border + "44"), borderBottom: isCurrent ? "1px solid " + ohCol.bg : "1px solid " + ohCol.border + "44", borderRadius: "6px 6px 0 0", cursor: "pointer", position: "relative", bottom: "-1px", zIndex: isCurrent ? 2 : 1 }}>{oh.taalGroup || oh.categoryName || oh.itemLabel}</button>);
                     })}
                   </div>
                 )}
@@ -2112,8 +2160,13 @@ export default function NakijkTool() {
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#EAB308", animation: "pulse 1.5s ease-in-out infinite", flexShrink: 0 }} />
                     <span style={{ fontWeight: "500", fontSize: "13px", fontStyle: "italic" }}>&ldquo;{pendingPreview}&rdquo;</span>
                     <span style={{ opacity: 0.7 }}>{"\u2192"} Kies een correctie-item in het zijpaneel</span>
+                    <button onClick={() => { addRepeatHighlight(pendingHighlight.start, pendingHighlight.end); setPendingHighlight(null); }}
+                      style={{ marginLeft: "auto", background: "#F3F4F6", border: "1px solid #9CA3AF", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", color: "#374151", cursor: "pointer", fontWeight: "600", flexShrink: 0 }}>
+                      Herhaalfout
+                    </button>
                   </>) : infoH ? (<>
                     {tabHighlights.length <= 1 && <span style={{ background: col.border + "22", padding: "2px 8px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", color: col.text }}>{infoH.itemLabel || infoH.categoryName}</span>}
+                    {infoH.isRepeat && <span style={{ fontSize: "11px", color: REPEAT_COLOR.text, fontStyle: "italic" }}>\u2014 geen score-invloed</span>}
                     <span style={{ opacity: 0.5 }}>{"\u2192"}</span>
                     <span style={{ fontWeight: "500", fontSize: "13px", fontStyle: "italic" }}>&ldquo;{passagePreview}&rdquo;</span>
                     <button onClick={(e) => { e.stopPropagation(); const r = highlights.find(h => h.id === selectedHighlightId); handleRemoveHighlight(selectedHighlightId); selectHighlight(null); if (r) { clearTimeout(removedFlashTimer.current); setRemovedFlash(r); removedFlashTimer.current = setTimeout(() => setRemovedFlash(null), 6000); } }}
@@ -2219,15 +2272,64 @@ export default function NakijkTool() {
                 </>)}
               </div>
             )}
-            <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => selectHighlight(null)}>
-              <HighlightableText text={studentText} highlights={highlights} onHighlight={handleTextSelection} onSelectHighlight={selectHighlight} hoveredItemId={hoveredItemId} selectedHighlightId={selectedHighlightId} itemNumbers={itemNumbers} />
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => { if (!textEditMode) selectHighlight(null); }}>
+              {!textEditMode && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                  <button onClick={(e) => { e.stopPropagation(); setTextEditValue(studentText); setTextEditMode(true); selectHighlight(null); setFrozenTabs(null); }}
+                    title="Tekst bewerken"
+                    style={{ background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", color: "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                    ✎ Tekst bewerken
+                  </button>
+                </div>
+              )}
+              {textEditMode ? (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>Pas de tekst aan. Markeringen worden automatisch meegeschoven.</div>
+                  <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
+                    style={{ width: "100%", minHeight: "300px", border: "1px solid #aaa", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }}
+                    autoFocus />
+                  <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                    <button onClick={() => applyTextEdit(textEditValue)}
+                      style={{ flex: 1, padding: "10px", fontSize: "13px", fontWeight: "600", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+                      Opslaan
+                    </button>
+                    <button onClick={() => { setTextEditMode(false); setTextEditValue(""); }}
+                      style={{ padding: "10px 20px", fontSize: "13px", background: "#f3f3f3", color: "#666", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
+                      Annuleer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <HighlightableText text={studentText} highlights={highlights} onHighlight={handleTextSelection} onSelectHighlight={selectHighlight} hoveredItemId={hoveredItemId} selectedHighlightId={selectedHighlightId} itemNumbers={itemNumbers} />
+              )}
             </div>
+            {textEditPending && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+                <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+                  <h3 style={{ margin: "0 0 12px", fontFamily: "'Georgia', serif", fontWeight: "400", color: "#1a1a2e", fontSize: "18px" }}>Let op: markeringen in gewijzigd gedeelte</h3>
+                  <p style={{ fontSize: "13px", color: "#555", marginBottom: "20px", lineHeight: "1.6" }}>
+                    Er {textEditPending.affected.length === 1 ? "staat 1 markering" : "staan " + textEditPending.affected.length + " markeringen"} in het gewijzigde gedeelte. Als je doorgaat, worden {textEditPending.affected.length === 1 ? "deze" : "deze"} verwijderd.
+                  </p>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button onClick={() => commitTextEdit(textEditPending.newText, textEditPending.prefixLen, textEditPending.oldEnd, textEditPending.delta, textEditPending.affected)}
+                      style={{ flex: 1, padding: "11px", fontSize: "13px", fontWeight: "600", background: "#EF4444", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+                      Doorgaan
+                    </button>
+                    <button onClick={() => setTextEditPending(null)}
+                      style={{ padding: "11px 20px", fontSize: "13px", background: "#f3f3f3", color: "#666", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
+                      Annuleer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {!inlineTextMode && <div style={{ marginTop: "10px", fontSize: "11px", color: "#aaa" }}>Selecteer tekst en klik op een item rechts, of klik eerst op een item en selecteer dan tekst.</div>}
             {!inlineTextMode && <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", color: "#888" }}>
               {categories.filter((c) => catModes[c.id] !== "taalAuto").map((cat) => (<div key={cat.id} style={{ display: "flex", alignItems: "center", gap: "4px" }}><div style={{ width: "24px", height: "10px", borderRadius: "3px", background: cat.color.bg, border: "1px solid " + cat.color.border }} /><span>{cat.name}</span></div>))}
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><span style={{ backgroundImage: 'url("data:image/svg+xml,' + encodeURIComponent('<svg width="8" height="6" viewBox="0 0 8 6" xmlns="http://www.w3.org/2000/svg"><path d="M0 3 Q2 0.5 4 3 Q6 5.5 8 3" fill="none" stroke="' + TAAL_SUB_COLORS.Spelfouten.border + '" stroke-width="1.2"/></svg>') + '")', backgroundRepeat: "repeat-x", backgroundPosition: "bottom", backgroundSize: "8px 6px", paddingBottom: "4px", fontSize: "12px", color: "#666" }}>abc</span><span>Spelfout</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><span style={{ backgroundImage: 'url("data:image/svg+xml,' + encodeURIComponent('<svg width="6" height="2" viewBox="0 0 6 2" xmlns="http://www.w3.org/2000/svg"><circle cx="1" cy="1" r="0.9" fill="' + TAAL_SUB_COLORS.Formuleringsfouten.border + '"/></svg>') + '")', backgroundRepeat: "repeat-x", backgroundPosition: "bottom", backgroundSize: "6px 2px", paddingBottom: "3px", fontSize: "12px", color: "#666" }}>abc</span><span>Formulering</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><span style={{ borderRadius: "50%", boxShadow: "0 0 0 2px " + TAAL_SUB_COLORS.Interpunctiefouten.border, padding: "0 3px", fontSize: "12px", color: "#666" }}>.</span><span>Interpunctie</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><span style={{ background: "repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(156,163,175,0.4) 3px, rgba(156,163,175,0.4) 4px)", backgroundColor: "#F3F4F6", borderRadius: "2px", padding: "0 4px", fontSize: "12px", color: "#666" }}>abc</span><span>Herhaalfout</span></div>
             </div>}
           </div>
 
