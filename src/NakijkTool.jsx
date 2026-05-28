@@ -2287,9 +2287,7 @@ export default function NakijkTool() {
                 <div onClick={(e) => e.stopPropagation()}>
                   <div style={{ fontSize: "12px", color: "#EF4444", fontWeight: "600", marginBottom: "10px" }}>✎ Tekstbewerking — markeringen schuiven automatisch mee.</div>
                   <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
-                    onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
-                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }}
-                    autoFocus />
+                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }} />
                   <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                     <button onClick={() => applyTextEdit(textEditValue)}
                       style={{ flex: 1, padding: "10px", fontSize: "13px", fontWeight: "600", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
