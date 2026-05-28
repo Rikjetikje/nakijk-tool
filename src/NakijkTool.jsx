@@ -2061,7 +2061,9 @@ export default function NakijkTool() {
                     doc.open();
                     doc.write('<html><head><title>' + (studentName || 'Resultaat') + (studentClass ? ' (' + studentClass + ')' : '') + '</title><style>body{font-family:"Segoe UI",sans-serif;padding:24px;color:#1a1a2e;font-size:13px}h2{font-family:Georgia,serif;font-weight:400}.no-print{display:none!important}</style></head><body>' + el.innerHTML + '</body></html>');
                     doc.close();
-                    setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => { try { document.body.removeChild(iframe); } catch(e) {} }, 1000); }, 200);
+                    const prevTitle = document.title;
+                    document.title = (studentName || 'Resultaat') + (studentClass ? ' (' + studentClass + ')' : '');
+                    setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => { document.title = prevTitle; try { document.body.removeChild(iframe); } catch(e) {} }, 1000); }, 200);
                   }}
                     style={{ background: "#1a1a2e", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>
                     {"\uD83D\uDDA8"} PDF / Print
@@ -2166,7 +2168,6 @@ export default function NakijkTool() {
                     </button>
                   </>) : infoH ? (<>
                     {tabHighlights.length <= 1 && <span style={{ background: col.border + "22", padding: "2px 8px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", color: col.text }}>{infoH.itemLabel || infoH.categoryName}</span>}
-                    {infoH.isRepeat && <span style={{ fontSize: "11px", color: REPEAT_COLOR.text, fontStyle: "italic" }}>\u2014 geen score-invloed</span>}
                     <span style={{ opacity: 0.5 }}>{"\u2192"}</span>
                     <span style={{ fontWeight: "500", fontSize: "13px", fontStyle: "italic" }}>&ldquo;{passagePreview}&rdquo;</span>
                     <button onClick={(e) => { e.stopPropagation(); const r = highlights.find(h => h.id === selectedHighlightId); handleRemoveHighlight(selectedHighlightId); selectHighlight(null); if (r) { clearTimeout(removedFlashTimer.current); setRemovedFlash(r); removedFlashTimer.current = setTimeout(() => setRemovedFlash(null), 6000); } }}
@@ -2272,7 +2273,7 @@ export default function NakijkTool() {
                 </>)}
               </div>
             )}
-            <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => { if (!textEditMode) selectHighlight(null); }}>
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: textEditMode ? "none" : "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", border: textEditMode ? "2px solid #EF4444" : "2px solid transparent", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => { if (!textEditMode) selectHighlight(null); }}>
               {!textEditMode && (
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
                   <button onClick={(e) => { e.stopPropagation(); setTextEditValue(studentText); setTextEditMode(true); selectHighlight(null); setFrozenTabs(null); }}
@@ -2284,9 +2285,10 @@ export default function NakijkTool() {
               )}
               {textEditMode ? (
                 <div onClick={(e) => e.stopPropagation()}>
-                  <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>Pas de tekst aan. Markeringen worden automatisch meegeschoven.</div>
+                  <div style={{ fontSize: "12px", color: "#EF4444", fontWeight: "600", marginBottom: "10px" }}>✎ Tekstbewerking — markeringen schuiven automatisch mee.</div>
                   <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
-                    style={{ width: "100%", minHeight: "300px", border: "1px solid #aaa", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }}
+                    onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
+                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }}
                     autoFocus />
                   <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                     <button onClick={() => applyTextEdit(textEditValue)}
