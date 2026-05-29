@@ -1005,6 +1005,22 @@ export default function NakijkTool() {
     }
   }, [textEditMode, textEditValue, liveTextEditAffected]);
 
+  // Compute live-adjusted highlight positions for the current textEditValue so they
+  // can be rendered in the background overlay while the user is typing.
+  const liveAdjustedHighlights = useMemo(() => {
+    if (!textEditMode || textEditValue === studentText) return highlights;
+    let p = 0;
+    while (p < studentText.length && p < textEditValue.length && studentText[p] === textEditValue[p]) p++;
+    let oe = studentText.length, ne = textEditValue.length;
+    while (oe > p && ne > p && studentText[oe - 1] === textEditValue[ne - 1]) { oe--; ne--; }
+    const delta = (ne - p) - (oe - p);
+    return highlights.map(h => {
+      if (h.end <= p) return h;
+      if (h.start >= oe) return { ...h, start: h.start + delta, end: h.end + delta };
+      return null; // highlight overlaps the changed region — will be removed on save
+    }).filter(Boolean);
+  }, [textEditMode, textEditValue, studentText, highlights]);
+
   const selectHighlight = useCallback((id) => {
     if (id === null) { setSelectedHighlightId(null); setFrozenTabs(null); return; }
     setSelectedHighlightId(id);
@@ -2298,8 +2314,15 @@ export default function NakijkTool() {
               {textEditMode ? (
                 <div onClick={(e) => e.stopPropagation()}>
                   <div style={{ fontSize: "12px", color: "#EF4444", fontWeight: "600", marginBottom: "10px" }}>✎ Tekstbewerking — markeringen schuiven automatisch mee.</div>
-                  <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
-                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e", background: "#fff" }} />
+                  <div style={{ position: "relative" }}>
+                    {/* Background layer: renders highlights for visual feedback while typing */}
+                    <div style={{ pointerEvents: "none", userSelect: "none", padding: "14px", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", boxSizing: "border-box" }}>
+                      <HighlightableText text={textEditValue} highlights={liveAdjustedHighlights} onHighlight={() => false} onSelectHighlight={() => {}} hoveredItemId={null} selectedHighlightId={null} itemNumbers={itemNumbers} />
+                    </div>
+                    {/* Transparent textarea on top for editing */}
+                    <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "transparent", color: "transparent", caretColor: "#1a1a2e", border: "1px solid transparent", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "none", outline: "none", boxSizing: "border-box", overflow: "hidden" }} />
+                  </div>
                   {liveTextEditAffected.length > 0 ? (() => {
                     const labels = [...new Set(liveTextEditAffected.map(h => h.isRepeat ? "Herhaalfout" : (h.taalGroup || h.itemLabel || h.categoryName || "markering")))];
                     const labelStr = labels.length === 1 ? `"${labels[0]}"` : labels.map(l => `"${l}"`).join(", ");
