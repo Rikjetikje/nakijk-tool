@@ -985,13 +985,17 @@ export default function NakijkTool() {
     let oldEnd = studentText.length, newEnd = newText.length;
     while (oldEnd > prefixLen && newEnd > prefixLen && studentText[oldEnd - 1] === newText[newEnd - 1]) { oldEnd--; newEnd--; }
     const delta = (newEnd - prefixLen) - (oldEnd - prefixLen);
-    const affected = highlights.filter(h => h.start < oldEnd && h.end > prefixLen);
-    if (affected.length > 0) {
-      setTextEditPending({ newText, prefixLen, oldEnd, delta, affected });
-    } else {
-      commitTextEdit(newText, prefixLen, oldEnd, delta, []);
-    }
-  }, [studentText, highlights, commitTextEdit]);
+    commitTextEdit(newText, prefixLen, oldEnd, delta, []);
+  }, [studentText, commitTextEdit]);
+
+  const liveTextEditAffected = useMemo(() => {
+    if (!textEditMode || textEditValue === studentText) return [];
+    let p = 0;
+    while (p < studentText.length && p < textEditValue.length && studentText[p] === textEditValue[p]) p++;
+    let oe = studentText.length, ne = textEditValue.length;
+    while (oe > p && ne > p && studentText[oe - 1] === textEditValue[ne - 1]) { oe--; ne--; }
+    return highlights.filter(h => h.start < oe && h.end > p);
+  }, [textEditMode, textEditValue, studentText, highlights]);
 
   const selectHighlight = useCallback((id) => {
     if (id === null) { setSelectedHighlightId(null); setFrozenTabs(null); return; }
@@ -2288,41 +2292,41 @@ export default function NakijkTool() {
                   <div style={{ fontSize: "12px", color: "#EF4444", fontWeight: "600", marginBottom: "10px" }}>✎ Tekstbewerking — markeringen schuiven automatisch mee.</div>
                   <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
                     style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }} />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                    <button onClick={() => applyTextEdit(textEditValue)}
-                      style={{ flex: 1, padding: "10px", fontSize: "13px", fontWeight: "600", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-                      Opslaan
-                    </button>
-                    <button onClick={() => { setTextEditMode(false); setTextEditValue(""); }}
-                      style={{ padding: "10px 20px", fontSize: "13px", background: "#f3f3f3", color: "#666", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
-                      Annuleer
-                    </button>
-                  </div>
+                  {liveTextEditAffected.length > 0 ? (() => {
+                    const labels = [...new Set(liveTextEditAffected.map(h => h.isRepeat ? "Herhaalfout" : (h.taalGroup || h.itemLabel || h.categoryName || "markering")))];
+                    const labelStr = labels.length === 1 ? `"${labels[0]}"` : labels.map(l => `"${l}"`).join(", ");
+                    return (
+                      <div style={{ marginTop: "10px", padding: "12px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "8px", fontSize: "13px", color: "#92400E", lineHeight: "1.6" }}>
+                        <div style={{ marginBottom: "10px" }}>⚠️ Met deze bewerking verdwijnt de markering van {labelStr}.</div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button onClick={() => setTextEditValue(studentText)}
+                            style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: "600", background: "#fff", color: "#92400E", border: "1px solid #FDE68A", borderRadius: "7px", cursor: "pointer" }}>
+                            Annuleer bewerking
+                          </button>
+                          <button onClick={() => applyTextEdit(textEditValue)}
+                            style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: "600", background: "#92400E", color: "#fff", border: "none", borderRadius: "7px", cursor: "pointer" }}>
+                            Doorgaan
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                      <button onClick={() => applyTextEdit(textEditValue)}
+                        style={{ flex: 1, padding: "10px", fontSize: "13px", fontWeight: "600", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+                        Opslaan
+                      </button>
+                      <button onClick={() => { setTextEditMode(false); setTextEditValue(""); }}
+                        style={{ padding: "10px 20px", fontSize: "13px", background: "#f3f3f3", color: "#666", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
+                        Annuleer
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <HighlightableText text={studentText} highlights={highlights} onHighlight={handleTextSelection} onSelectHighlight={selectHighlight} hoveredItemId={hoveredItemId} selectedHighlightId={selectedHighlightId} itemNumbers={itemNumbers} />
               )}
             </div>
-            {textEditPending && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-                <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-                  <h3 style={{ margin: "0 0 12px", fontFamily: "'Georgia', serif", fontWeight: "400", color: "#1a1a2e", fontSize: "18px" }}>Let op: markeringen in gewijzigd gedeelte</h3>
-                  <p style={{ fontSize: "13px", color: "#555", marginBottom: "20px", lineHeight: "1.6" }}>
-                    Er {textEditPending.affected.length === 1 ? "staat 1 markering" : "staan " + textEditPending.affected.length + " markeringen"} in het gewijzigde gedeelte. Als je doorgaat, worden {textEditPending.affected.length === 1 ? "deze" : "deze"} verwijderd.
-                  </p>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button onClick={() => commitTextEdit(textEditPending.newText, textEditPending.prefixLen, textEditPending.oldEnd, textEditPending.delta, textEditPending.affected)}
-                      style={{ flex: 1, padding: "11px", fontSize: "13px", fontWeight: "600", background: "#EF4444", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-                      Doorgaan
-                    </button>
-                    <button onClick={() => setTextEditPending(null)}
-                      style={{ padding: "11px 20px", fontSize: "13px", background: "#f3f3f3", color: "#666", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
-                      Annuleer
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
             {!inlineTextMode && <div style={{ marginTop: "10px", fontSize: "11px", color: "#aaa" }}>Selecteer tekst en klik op een item rechts, of klik eerst op een item en selecteer dan tekst.</div>}
             {!inlineTextMode && <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", color: "#888" }}>
               {categories.filter((c) => catModes[c.id] !== "taalAuto").map((cat) => (<div key={cat.id} style={{ display: "flex", alignItems: "center", gap: "4px" }}><div style={{ width: "24px", height: "10px", borderRadius: "3px", background: cat.color.bg, border: "1px solid " + cat.color.border }} /><span>{cat.name}</span></div>))}
