@@ -371,6 +371,7 @@ export default function NakijkTool() {
   const nextId = useRef(1);
   const scoresInitialized = useRef(false);
   const resumeData = useRef(null);
+  const lastSafeEditValueRef = useRef("");
   const autoSaveTimer = useRef(null);
   const removedFlashTimer = useRef(null);
   const justSelectedTextRef = useRef(false);
@@ -996,6 +997,13 @@ export default function NakijkTool() {
     while (oe > p && ne > p && studentText[oe - 1] === textEditValue[ne - 1]) { oe--; ne--; }
     return highlights.filter(h => h.start < oe && h.end > p);
   }, [textEditMode, textEditValue, studentText, highlights]);
+
+  // Track the last value that didn't affect any highlights, so "Annuleer bewerking" only undoes the problematic change
+  useEffect(() => {
+    if (textEditMode && liveTextEditAffected.length === 0) {
+      lastSafeEditValueRef.current = textEditValue;
+    }
+  }, [textEditMode, textEditValue, liveTextEditAffected]);
 
   const selectHighlight = useCallback((id) => {
     if (id === null) { setSelectedHighlightId(null); setFrozenTabs(null); return; }
@@ -2280,7 +2288,7 @@ export default function NakijkTool() {
             <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: textEditMode ? "none" : "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)", border: textEditMode ? "2px solid #EF4444" : "2px solid transparent", minHeight: "400px", display: inlineTextMode ? "none" : "block" }} onClick={() => { if (!textEditMode) selectHighlight(null); }}>
               {!textEditMode && (
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-                  <button onClick={(e) => { e.stopPropagation(); setTextEditValue(studentText); setTextEditMode(true); selectHighlight(null); setFrozenTabs(null); }}
+                  <button onClick={(e) => { e.stopPropagation(); lastSafeEditValueRef.current = studentText; setTextEditValue(studentText); setTextEditMode(true); selectHighlight(null); setFrozenTabs(null); }}
                     title="Tekst bewerken"
                     style={{ background: "none", border: "1px solid #ddd", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", color: "#888", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
                     ✎ Tekst bewerken
@@ -2291,7 +2299,7 @@ export default function NakijkTool() {
                 <div onClick={(e) => e.stopPropagation()}>
                   <div style={{ fontSize: "12px", color: "#EF4444", fontWeight: "600", marginBottom: "10px" }}>✎ Tekstbewerking — markeringen schuiven automatisch mee.</div>
                   <textarea value={textEditValue} onChange={e => setTextEditValue(e.target.value)}
-                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e" }} />
+                    style={{ width: "100%", minHeight: "300px", border: "1px solid #ddd", borderRadius: "10px", padding: "14px", fontSize: "15px", fontFamily: "'Georgia', 'Times New Roman', serif", lineHeight: "2.0", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#1a1a2e", background: "#fff" }} />
                   {liveTextEditAffected.length > 0 ? (() => {
                     const labels = [...new Set(liveTextEditAffected.map(h => h.isRepeat ? "Herhaalfout" : (h.taalGroup || h.itemLabel || h.categoryName || "markering")))];
                     const labelStr = labels.length === 1 ? `"${labels[0]}"` : labels.map(l => `"${l}"`).join(", ");
@@ -2299,7 +2307,7 @@ export default function NakijkTool() {
                       <div style={{ marginTop: "10px", padding: "12px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "8px", fontSize: "13px", color: "#92400E", lineHeight: "1.6" }}>
                         <div style={{ marginBottom: "10px" }}>⚠️ Met deze bewerking verdwijnt de markering van {labelStr}.</div>
                         <div style={{ display: "flex", gap: "8px" }}>
-                          <button onClick={() => setTextEditValue(studentText)}
+                          <button onClick={() => setTextEditValue(lastSafeEditValueRef.current)}
                             style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: "600", background: "#fff", color: "#92400E", border: "1px solid #FDE68A", borderRadius: "7px", cursor: "pointer" }}>
                             Annuleer bewerking
                           </button>
